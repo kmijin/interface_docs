@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>시스템 인터페이스 정의서 생성기</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "맑은 고딕", "Malgun Gothic", sans-serif; background: #f4f6f9; color: #333; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1e3a5f; color: white; padding: 18px 32px; }
+    header h1 { font-size: 1.3rem; font-weight: 600; }
+    header p  { font-size: 0.85rem; opacity: 0.75; margin-top: 4px; }
+    main { flex: 1; padding: 32px; max-width: 980px; margin: 0 auto; width: 100%; }
+
+    .card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 20px; }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 14px; color: #1e3a5f; display: flex; align-items: center; gap: 8px; }
+    .badge { font-size: 0.7rem; background: #e2e8f0; color: #555; padding: 2px 7px; border-radius: 10px; font-weight: 500; }
+    .badge.active { background: #d1fae5; color: #065f46; }
+
+    label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; color: #555; }
+    textarea {
+      width: 100%; height: 380px; font-family: "Consolas", "D2Coding", monospace; font-size: 0.82rem;
+      border: 1px solid #ccc; border-radius: 6px; padding: 12px; resize: vertical;
+      background: #fafafa; color: #222; line-height: 1.5; transition: border-color 0.2s;
+    }
+    textarea:focus { outline: none; border-color: #1e3a5f; background: white; }
+    textarea.error { border-color: #e53e3e; }
+
+    .hint { font-size: 0.78rem; color: #888; margin-top: 6px; }
+    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .md-toggle { font-size: 0.82rem; color: #555; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    button {
+      padding: 9px 20px; font-size: 0.88rem; font-weight: 600; border: none; border-radius: 6px;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    button.primary   { background: #1e3a5f; color: white; }
+    button.primary:hover { background: #2a4f82; }
+    button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary { background: #e2e8f0; color: #333; }
+    button.secondary:hover { background: #cbd5e0; }
+    button.sm { font-size: 0.78rem; padding: 5px 12px; }
+    button.danger { background: #fee2e2; color: #b91c1c; }
+    button.danger:hover { background: #fecaca; }
+
+    .status { font-size: 0.85rem; padding: 6px 12px; border-radius: 4px; }
+    .status.success  { background: #e6f4ea; color: #276749; }
+    .status.err      { background: #fff5f5; color: #c53030; }
+    .status.loading  { background: #ebf4ff; color: #2b6cb0; }
+
+    /* ── 템플릿 업로드 영역 ── */
+    .drop-zone {
+      border: 2px dashed #c0cfe0; border-radius: 8px; padding: 28px 20px;
+      text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      background: #f8fafc;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1e3a5f; background: #eef4fb; }
+    .drop-zone p { font-size: 0.9rem; color: #666; margin-bottom: 8px; }
+    .drop-zone span { font-size: 0.78rem; color: #aaa; }
+    #fileInput { display: none; }
+
+    /* 분석 결과 카드 */
+    .profile-box {
+      margin-top: 14px; background: #f8fafc; border: 1px solid #d1dce8;
+      border-radius: 6px; padding: 14px 16px; display: none;
+    }
+    .profile-box.show { display: block; }
+    .profile-box h3 { font-size: 0.88rem; font-weight: 600; color: #1e3a5f; margin-bottom: 10px; }
+    .profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+    .profile-item { background: white; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px 10px; }
+    .profile-item .pi-label { font-size: 0.72rem; color: #888; margin-bottom: 2px; }
+    .profile-item .pi-val   { font-size: 0.85rem; font-weight: 600; color: #222; }
+    .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #ccc; vertical-align: middle; margin-right: 5px; }
+    .section-list { margin-top: 8px; }
+    .section-list .sec-tag { display: inline-block; font-size: 0.75rem; background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; margin: 2px; }
+    .table-stat { font-size: 0.78rem; color: #555; margin-top: 6px; }
+
+    /* JSON 정보 칩 */
+    .json-chips { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .json-chips span { font-size: 0.78rem; background: #edf2ff; color: #3730a3; padding: 3px 8px; border-radius: 4px; }
+    .json-chips span.err-chip { background: #fff5f5; color: #c53030; }
+
+    footer { text-align: center; font-size: 0.78rem; color: #aaa; padding: 16px; }
+
+    /* ── 컨플루언스 연동 ── */
+    .conf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-bottom: 14px; }
+    .conf-grid .full { grid-column: 1 / -1; }
+    .conf-input {
+      width: 100%; font-family: "Consolas", monospace; font-size: 0.88rem;
+      border: 1px solid #ccc; border-radius: 6px; padding: 8px 12px;
+      transition: border-color 0.2s;
+    }
+    .conf-input:focus { outline: none; border-color: #1e3a5f; }
+    .conf-divider { border: none; border-top: 1px solid #e2e8f0; margin: 18px 0 16px; }
+
+    /* 탭 */
+    .tab-bar { display: flex; gap: 0; margin-bottom: 14px; border-bottom: 2px solid #e2e8f0; }
+    .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      padding: 8px 18px; font-size: 0.88rem; font-weight: 500; color: #888; cursor: pointer; border-radius: 0; }
+    .tab-btn.active { color: #1e3a5f; border-bottom-color: #1e3a5f; font-weight: 600; }
+    .tab-btn:hover:not(.active) { color: #444; }
+
+    /* URL 입력 */
+    .url-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .url-row input { flex: 1; font-family: "Consolas", monospace; font-size: 0.88rem;
+      border: 1px solid #ccc; border-radius: 6px; padding: 9px 12px;
+      transition: border-color 0.2s; }
+    .url-row input:focus { outline: none; border-color: #1e3a5f; }
+    .url-row input.error { border-color: #e53e3e; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>시스템 인터페이스 정의서 생성기</h1>
+  <p>Swagger / OpenAPI 3.x JSON을 붙여넣고 .docx 문서를 다운로드하세요</p>
+</header>
+<main>
+
+  <!-- ① 템플릿 양식 업로드 -->
+  <div class="card">
+    <h2>
+      문서 양식 (템플릿)
+      <span class="badge" id="templateBadge">미설정</span>
+    </h2>
+
+    <div class="drop-zone" id="dropZone">
+      <p>여기에 .docx 파일을 드래그하거나 클릭하여 업로드</p>
+      <span>양식 파일을 올리면 구조·스타일을 자동 분석해 동일한 형식으로 문서를 생성합니다</span>
+      <input type="file" id="fileInput" accept=".docx" />
+    </div>
+
+    <div class="profile-box" id="profileBox">
+      <h3 id="profileTitle"></h3>
+      <div class="profile-grid" id="profileGrid"></div>
+      <div class="section-list" id="sectionList"></div>
+      <div class="table-stat" id="tableStat"></div>
+      <div class="actions" style="margin-top:12px;">
+        <button class="secondary sm" id="clearTemplateBtn">양식 제거</button>
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:10px;">양식을 올리지 않으면 기본 스타일로 생성됩니다.</p>
+  </div>
+
+  <!-- ② 인터페이스 ID -->
+  <div class="card">
+    <h2>인터페이스 ID</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" id="idPrefixInput" placeholder="예: INF_OPE, INF_SHOP_101"
+        style="width:280px;font-family:Consolas,monospace;font-size:0.88rem;border:1px solid #ccc;border-radius:6px;padding:8px 12px;" />
+      <span style="font-size:0.78rem;color:#aaa;">비우면 기본값 INF 사용 — INF_OPE 입력 시 INF_OPE-001, INF_OPE-002 … 순번 자동 부여</span>
+    </div>
+  </div>
+
+  <!-- ③ Swagger 입력 (탭: JSON / URL) -->
+  <div class="card">
+    <h2>Swagger / OpenAPI 입력</h2>
+
+    <!-- 탭 -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="json">JSON 직접 입력</button>
+      <button class="tab-btn" data-tab="url">URL로 불러오기</button>
+    </div>
+
+    <!-- JSON 탭 -->
+    <div class="tab-pane" id="tab-json">
+      <div class="actions" style="margin-bottom: 8px;">
+        <button class="secondary sm" id="loadSampleBtn">샘플 불러오기</button>
+        <button class="secondary sm" id="formatBtn">JSON 정렬</button>
+        <button class="secondary sm" id="clearJsonBtn">지우기</button>
+      </div>
+      <textarea id="jsonInput" placeholder='{"openapi": "3.1.0", "info": {"title": "My API", ...}, "paths": {...}}'></textarea>
+      <div class="json-chips" id="jsonChips"></div>
+      <p class="hint">OpenAPI 3.x 또는 Swagger 2.x JSON을 그대로 붙여넣으세요.</p>
+    </div>
+
+    <!-- URL 탭 -->
+    <div class="tab-pane" id="tab-url" style="display:none;">
+      <div class="url-row">
+        <input type="text" id="swaggerUrl"
+          placeholder="http://localhost:8080/v3/api-docs"
+          spellcheck="false" autocomplete="off" />
+        <button class="secondary" id="fetchUrlBtn">불러오기</button>
+      </div>
+      <div class="json-chips" id="urlChips"></div>
+      <p class="hint">Swagger UI가 바라보는 JSON 엔드포인트 주소를 입력하세요. (예: /v3/api-docs, /swagger.json, /api-docs)</p>
+    </div>
+  </div>
+
+  <!-- ④ 문서 생성 -->
+  <div class="card">
+    <h2>문서 생성</h2>
+    <div class="actions">
+      <button class="primary" id="generateBtn">DOCX 다운로드</button>
+      <button class="secondary" id="generateMdBtn">MD 다운로드</button>
+      <span class="status" id="statusMsg" style="display:none;"></span>
+    </div>
+  </div>
+
+  <!-- ⑤ Confluence 업로드 -->
+  <div class="card">
+    <h2>Confluence 업로드</h2>
+    <div style="margin-bottom:14px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+      <div>
+        <label for="confEmailInput">이메일</label>
+        <input type="text" id="confEmailInput" placeholder="예: user@example.com"
+          style="width:220px;font-family:Consolas,monospace;font-size:0.88rem;border:1px solid #ccc;border-radius:6px;padding:8px 12px;" />
+      </div>
+      <div>
+        <label for="confTokenInput">API 토큰</label>
+        <input type="password" id="confTokenInput" placeholder="Atlassian API Token"
+          style="width:220px;font-family:Consolas,monospace;font-size:0.88rem;border:1px solid #ccc;border-radius:6px;padding:8px 12px;" />
+      </div>
+      <div>
+        <label for="confSpaceKeyInput">Space Key</label>
+        <input type="text" id="confSpaceKeyInput" placeholder="예: MFS, ~userId"
+          style="width:160px;font-family:Consolas,monospace;font-size:0.88rem;border:1px solid #ccc;border-radius:6px;padding:8px 12px;" />
+      </div>
+      <input type="hidden" id="confParentIdInput" />
+    </div>
+    <div class="actions">
+      <button class="secondary" id="quickConfUploadBtn">Confluence 업로드</button>
+      <span class="status" id="confStatusMsg" style="display:none;"></span>
+    </div>
+  </div>
+
+</main>
+<footer>시스템 인터페이스 정의서 생성기</footer>
+
+<script>
+// ── 상태 ─────────────────────────────────────────────────────────────────────
+let templateProfile = null;
+let templateFileName = "";
+let _swaggerObj = null; // 현재 로드된 Swagger 객체 캐시
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────────
+function showStatus(msg, type) {
+  const el = document.getElementById("statusMsg");
+  el.textContent = msg;
+  el.className = "status " + type;
+  el.style.display = "inline-block";
+}
+function hideStatus() { document.getElementById("statusMsg").style.display = "none"; }
+
+// ── JSON 입력 ─────────────────────────────────────────────────────────────────
+const textarea = document.getElementById("jsonInput");
+function updateJsonChips() {
+  const chips = document.getElementById("jsonChips");
+  const val = textarea.value.trim();
+  if (!val) { chips.innerHTML = ""; textarea.classList.remove("error"); return; }
+  try {
+    const obj = JSON.parse(val);
+    _swaggerObj = obj;
+    textarea.classList.remove("error");
+    const title     = obj.info?.title || "-";
+    const version   = obj.info?.version || "-";
+    const pathCount = Object.keys(obj.paths || {}).length;
+    const opCount   = Object.values(obj.paths || {}).reduce((n, m) => n + Object.keys(m).length, 0);
+    chips.innerHTML = `<span>제목: ${title}</span><span>버전: ${version}</span><span>경로: ${pathCount}개</span><span>API: ${opCount}개</span>`;
+  } catch {
+    textarea.classList.add("error");
+    chips.innerHTML = `<span class="err-chip">JSON 파싱 오류</span>`;
+  }
+}
+textarea.addEventListener("input", updateJsonChips);
+
+document.getElementById("formatBtn").addEventListener("click", () => {
+  try { textarea.value = JSON.stringify(JSON.parse(textarea.value), null, 2); updateJsonChips(); }
+  catch { showStatus("유효하지 않은 JSON입니다.", "err"); }
+});
+document.getElementById("clearJsonBtn").addEventListener("click", () => {
+  textarea.value = ""; updateJsonChips(); hideStatus();
+});
+document.getElementById("loadSampleBtn").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/swagger-sample.json");
+    if (res.ok) { textarea.value = await res.text(); updateJsonChips(); }
+    else showStatus("샘플을 찾을 수 없습니다.", "err");
+  } catch { showStatus("샘플 로드 실패.", "err"); }
+});
+
+// ── 템플릿 업로드 ─────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file) uploadTemplate(file);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) uploadTemplate(fileInput.files[0]);
+});
+
+document.getElementById("clearTemplateBtn").addEventListener("click", () => {
+  templateProfile = null;
+  templateFileName = "";
+  document.getElementById("profileBox").classList.remove("show");
+  document.getElementById("templateBadge").textContent = "미설정";
+  document.getElementById("templateBadge").className = "badge";
+  fileInput.value = "";
+});
+
+async function uploadTemplate(file) {
+  if (!file.name.match(/\.docx$/i)) { showStatus(".docx 파일만 지원합니다.", "err"); return; }
+
+  dropZone.querySelector("p").textContent = "분석 중...";
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/analyze-template", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    templateProfile  = data.profile;
+    templateFileName = file.name;
+    renderProfile(data.profile, file.name);
+  } catch (err) {
+    showStatus("템플릿 분석 실패: " + err.message, "err");
+  } finally {
+    dropZone.querySelector("p").textContent = "여기에 .docx 파일을 드래그하거나 클릭하여 업로드";
+  }
+}
+
+function renderProfile(profile, fileName) {
+  const badge = document.getElementById("templateBadge");
+  badge.textContent = "적용됨";
+  badge.className = "badge active";
+
+  document.getElementById("profileTitle").textContent = `분석 결과 — ${fileName}`;
+
+  // 기본 정보 그리드
+  const grid = document.getElementById("profileGrid");
+  const colorDot = c => `<span class="color-dot" style="background:#${c}"></span>#${c}`;
+  grid.innerHTML = `
+    <div class="profile-item"><div class="pi-label">폰트</div><div class="pi-val">${profile.font || "-"}</div></div>
+    <div class="profile-item"><div class="pi-label">헤더 배경색</div><div class="pi-val">${colorDot(profile.colors?.headerBg || "D9D9D9")}</div></div>
+    <div class="profile-item"><div class="pi-label">테두리 색상</div><div class="pi-val">${colorDot(profile.colors?.border || "000000")}</div></div>
+    <div class="profile-item"><div class="pi-label">페이지 크기</div><div class="pi-val">${profile.layout?.pageWidth || "-"} × ${profile.layout?.pageHeight || "-"}</div></div>
+    <div class="profile-item"><div class="pi-label">여백 (상/하/좌/우)</div><div class="pi-val">${Object.values(profile.layout?.margins || {}).join(" / ") || "-"}</div></div>
+    <div class="profile-item"><div class="pi-label">감지된 표 수</div><div class="pi-val">${profile.raw?.tableCount || 0}개</div></div>
+  `;
+
+  // 섹션 태그
+  const secList  = document.getElementById("sectionList");
+  const types    = profile.raw?.detectedSectionTypes || [];
+  const sections = profile.sections || [];
+  if (sections.length > 0) {
+    const tags = sections.map(s => `<span class="sec-tag">${s.text}</span>`).join("");
+    secList.innerHTML = `<div style="font-size:0.8rem;color:#555;margin-bottom:4px;">감지된 섹션 (${sections.length}개)</div>${tags}`;
+  } else {
+    secList.innerHTML = `<div style="font-size:0.8rem;color:#888;">섹션 구조 감지 없음 (페이지 레이아웃·색상·폰트는 적용됨)</div>`;
+  }
+
+  // 표 구조 요약
+  const tStat = document.getElementById("tableStat");
+  const allTables = profile.tables?.allTables || [];
+  if (allTables.length > 0) {
+    const summary = allTables.slice(0, 5).map(t => `${t.cols}열${t.headers.length ? `(${t.headers.slice(0,3).join("·")})` : ""}`).join(", ");
+    tStat.textContent = `표 구조 샘플: ${summary}${allTables.length > 5 ? " …" : ""}`;
+  }
+
+  document.getElementById("profileBox").classList.add("show");
+}
+
+// ── 탭 전환 ───────────────────────────────────────────────────────────────────
+let activeTab = "json"; // "json" | "url"
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-json").style.display = activeTab === "json" ? "" : "none";
+    document.getElementById("tab-url").style.display  = activeTab === "url"  ? "" : "none";
+  });
+});
+
+// ── URL 불러오기 ──────────────────────────────────────────────────────────────
+let fetchedSwaggerUrl = null; // 마지막으로 성공한 URL
+
+document.getElementById("fetchUrlBtn").addEventListener("click", async () => {
+  const url = document.getElementById("swaggerUrl").value.trim();
+  if (!url) { showStatus("URL을 입력하세요.", "err"); return; }
+
+  const fetchBtn = document.getElementById("fetchUrlBtn");
+  fetchBtn.disabled = true;
+  showStatus("Swagger JSON 불러오는 중...", "loading");
+
+  try {
+    const res = await fetch("/fetch-swagger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    fetchedSwaggerUrl = url;
+    _swaggerObj = data.swagger;
+
+    // 칩으로 API 요약 표시
+    const swagger = data.swagger;
+    const paths = swagger.paths || {};
+    const chips = document.getElementById("urlChips");
+    const apiCount = Object.values(paths).reduce((n, v) => n + Object.keys(v).length, 0);
+    const title = swagger.info?.title || "Swagger";
+    const version = swagger.info?.version || "";
+    chips.innerHTML =
+      `<span>${title} ${version}</span>` +
+      `<span>API ${apiCount}개</span>`;
+
+    showStatus(`불러오기 완료: ${title}`, "success");
+  } catch (err) {
+    fetchedSwaggerUrl = null;
+    document.getElementById("urlChips").innerHTML = `<span class="err-chip">${err.message}</span>`;
+    showStatus("불러오기 실패: " + err.message, "err");
+  } finally {
+    fetchBtn.disabled = false;
+  }
+});
+
+// ── 문서 생성 ─────────────────────────────────────────────────────────────────
+document.getElementById("generateBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("generateBtn");
+  btn.disabled = true;
+  showStatus(templateProfile ? "템플릿 양식 적용 중..." : "문서 생성 중...", "loading");
+
+  try {
+    let body = {};
+    if (templateProfile) body.templateProfile = templateProfile;
+    const idPrefix = document.getElementById("idPrefixInput").value.trim();
+    if (idPrefix) body.idPrefix = idPrefix;
+
+    if (activeTab === "url") {
+      const url = document.getElementById("swaggerUrl").value.trim();
+      if (!url) { showStatus("URL을 먼저 입력하고 불러오기를 눌러주세요.", "err"); btn.disabled = false; return; }
+      body.swaggerUrl = url;
+    } else {
+      const val = textarea.value.trim();
+      if (!val) { showStatus("JSON을 먼저 입력하세요.", "err"); btn.disabled = false; return; }
+      let swaggerObj;
+      try { swaggerObj = JSON.parse(val); }
+      catch { showStatus("JSON 파싱 오류: 형식을 확인하세요.", "err"); btn.disabled = false; return; }
+      body.swagger = swaggerObj;
+    }
+
+    const res = await fetch("/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    let filename = "시스템_인터페이스_정의서.docx";
+    const match = disposition.match(/filename\*=UTF-8''(.+)/);
+    if (match) filename = decodeURIComponent(match[1]);
+
+    const dlUrl = URL.createObjectURL(blob);
+    const a     = document.createElement("a");
+    a.href = dlUrl; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(dlUrl);
+
+    showStatus(templateProfile ? "다운로드 완료! (양식 적용됨)" : "다운로드 완료!", "success");
+  } catch (err) {
+    showStatus("오류: " + err.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+// ── MD 다운로드 ───────────────────────────────────────────────────────────────
+document.getElementById("generateMdBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("generateMdBtn");
+  btn.disabled = true;
+  showStatus("MD 생성 중...", "loading");
+
+  try {
+    let body = {};
+    const idPrefix = document.getElementById("idPrefixInput").value.trim();
+    if (idPrefix) body.idPrefix = idPrefix;
+    if (activeTab === "url") {
+      const url = document.getElementById("swaggerUrl").value.trim();
+      if (!url) { showStatus("URL을 먼저 입력하고 불러오기를 눌러주세요.", "err"); btn.disabled = false; return; }
+      body.swaggerUrl = url;
+    } else {
+      const val = textarea.value.trim();
+      if (!val) { showStatus("JSON을 먼저 입력하세요.", "err"); btn.disabled = false; return; }
+      let swaggerObj;
+      try { swaggerObj = JSON.parse(val); }
+      catch { showStatus("JSON 파싱 오류: 형식을 확인하세요.", "err"); btn.disabled = false; return; }
+      body.swagger = swaggerObj;
+    }
+
+    const res = await fetch("/generate-md", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    let filename = "시스템_인터페이스_정의서.md";
+    const match = disposition.match(/filename\*=UTF-8''(.+)/);
+    if (match) filename = decodeURIComponent(match[1]);
+
+    const dlUrl = URL.createObjectURL(blob);
+    const a     = document.createElement("a");
+    a.href = dlUrl; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(dlUrl);
+
+    showStatus("MD 다운로드 완료!", "success");
+  } catch (err) {
+    showStatus("오류: " + err.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── [Confluence 업로드] ───────────────────────────────────────────────────────
+document.getElementById("quickConfUploadBtn").addEventListener("click", async () => {
+  const btn      = document.getElementById("quickConfUploadBtn");
+  const statusEl = document.getElementById("confStatusMsg");
+
+  const showStatus = (msg, type) => {
+    statusEl.textContent = msg;
+    statusEl.className   = `status ${type}`;
+    statusEl.style.display = "";
+  };
+
+  btn.disabled = true;
+  try {
+    // Swagger 데이터 확인
+    let swaggerObj = _swaggerObj;
+    if (!swaggerObj && activeTab === "json") {
+      const val = textarea.value.trim();
+      if (!val) throw new Error("Swagger JSON을 먼저 입력하세요.");
+      swaggerObj = JSON.parse(val);
+      _swaggerObj = swaggerObj;
+    }
+    if (!swaggerObj) throw new Error("Swagger 데이터를 먼저 불러오세요.");
+
+    const idPrefix     = document.getElementById("idPrefixInput").value.trim() || null;
+    const email        = document.getElementById("confEmailInput").value.trim();
+    const token        = document.getElementById("confTokenInput").value.trim();
+    const spaceKey     = document.getElementById("confSpaceKeyInput").value.trim() || null;
+    const parentPageId = document.getElementById("confParentIdInput").value.trim() || null;
+
+    if (!email || !token) {
+      alert("Confluence 이메일과 API 토큰을 입력해주세요.");
+      return;
+    }
+
+    showStatus("업로드 준비 중...", "loading");
+
+    const res = await fetch("/confluence-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ swagger: swaggerObj, spaceKey, parentPageId, idPrefix, email, token }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    showStatus(`완료: ${data.created}개 생성, ${data.updated}개 업데이트`, "success");
+    if (data.pageUrl) window.open(data.pageUrl, "_blank");
+  } catch (err) {
+    showStatus("업로드 실패: " + err.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

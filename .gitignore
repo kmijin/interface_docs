@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .htaccess
 css.php
 rpc/
@@ -9,3 +10,10 @@ sites/site*/public/theme/
 textpattern/
 HISTORY.txt
 README.txt
+=======
+# 민감 정보
+confluence.config.json
+
+# Node.js
+node_modules/
+>>>>>>> 8e0c3aa (feat: 인터페이스 정의서 생성기)

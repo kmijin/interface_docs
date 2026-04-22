@@ -1,0 +1,798 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "🅿️최적 주차 Zone 탐색 엔진 API",
+    "description": "# 주차면 탐색 시나리오 20250825\u003Cbr\u003E\n\u003Cimg src='http://192.168.10.30:9090/ope/images/20250825_scenario.png' alt='20250825 시나리오'/\u003E\u003Cbr\u003E\n",
+    "contact": {
+      "name": "GEON LEE",
+      "email": "geonlee@hubilon.com"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    "version": "v0.0.1"
+  },
+  "servers": [
+    {
+      "url": "/ope"
+    }
+  ],
+  "paths": {
+    "/api/v1/parameter/modify": {
+      "post": {
+        "tags": [
+          "파라미터"
+        ],
+        "summary": "Parameter 수정",
+        "description": "Parameter 정보를 수정합니다.",
+        "operationId": "modify",
+        "requestBody": {
+          "description": "수정할 파라메터 정보",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParameterModifyRequest"
+              },
+              "examples": {
+                "혼잡도 기준 변경": {
+                  "summary": "혼잡도 기준(%) 변경",
+                  "description": "혼잡도 기준 변경",
+                  "value": {
+                    "parameterId": "CONGESTION",
+                    "parameterKey": "BASIC",
+                    "parameterValue": "80"
+                  }
+                },
+                "P1층 분산 거리 변경": {
+                  "summary": "P1층 분산 거리(m) 변경",
+                  "description": "P1층 분산 거리 변경",
+                  "value": {
+                    "parameterId": "FLOOR_SPLIT_DISTANCE",
+                    "parameterKey": "P1",
+                    "parameterValue": "30"
+                  }
+                },
+                "P2층 분산 거리 변경": {
+                  "summary": "P2층 분산 거리(m) 변경",
+                  "description": "P2층 분산 거리 변경",
+                  "value": {
+                    "parameterId": "FLOOR_SPLIT_DISTANCE",
+                    "parameterKey": "P2",
+                    "parameterValue": "30"
+                  }
+                },
+                "층 변경 패널티 변경": {
+                  "summary": "층 변경 패널티 거리(m) 변경",
+                  "description": "층 변경 패널티 변경",
+                  "value": {
+                    "parameterId": "FLOOR_CHANGE_PENALTY",
+                    "parameterKey": "BASIC",
+                    "parameterValue": "30"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponseParameterModifyResponse"
+                }
+              }
+            }
+          },
+          "300": {
+            "description": "No Data\n- 조회한 데이터가 없음.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_05",
+                  "message": "데이터가 존재하지 않습니다."
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Data Processing Error\n- 로직 처리중 Exception 발생. 개발자에게 문의 필요.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_02",
+                  "message": "데이터를 처리하는데 실패하였습니다."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request\n- 요청한 정보가 올바른지 확인한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_01",
+                  "message": "적합하지 않은 인자가 전달되었습니다."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error\n- 서버 에러 로그 확인을 요청한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_01",
+                  "message": "요청한 서비스에 문제가 발생했습니다. 잠시 후에 다시 시도해 주세요."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/zones/optimal": {
+      "get": {
+        "tags": [
+          "최적 경로 탐색"
+        ],
+        "summary": "최적 주차 zone 조회",
+        "description": "# ※모든 HTTP status code 는 200 OK 를 리턴한다. (Unchecked Exception 제외)\u003Cbr\u003E\n## Operation 의 response code는 분리 표출용.\u003Cbr\u003E\u003Cbr\u003E\n\n\u003Cimg src='http://121.134.167.215:60040/ope/images/20250825_logic.png' alt='20250825 zone 추출 로직'/\u003E\u003Cbr\u003E\n## 주차 가능 층 정보\n- 2, P1, B3\n- 3, P2, B4\n## 혼잡도 관련\n- 유입량 패턴 적용 (패턴 데이터는 15분 단위, 혼잡률 기준 90%)\n- 요청 요일, 시간대의 유입량을 기준으로 층별 혼잡도 계산\n- 혼잡도 = (요일 시간대의 평균 유입량 + 요일 시간대의 유입량 표준편차) / 층의 '일반' 주차 가능 면 수\n- 금요일 18시 5분 기준 평균 유입량(23), 표준편차(0.52), 2층의 일반 주차 가능 면 수(25)라면\n- 혼잡도 = (23 + 0.52) / 25 = 0.92 (혼잡 -\u003E 3층 배정)\n- 2,3층 모두 혼잡한 경우 낮은 층 우선 빈 '일반' 주차면 많은 순 배정\n\n## parameter 정보 (API 를 통해서 실시간 변경 가능, /api/v1/parameter/modify)\n- CONGESTION, BASIC: 혼잡도 기준 (default: 80)\n- FLOOR_SPLIT_DISTANCE, P1: P1 층 층 분산 거리 (default: 35m)\n- FLOOR_SPLIT_DISTANCE, P2: P2 층 층 분산 거리 (default: 35m)\n- FLOOR_CHANGE_PENALTY, BASIC: 층변경 패널티 (default 50m)\n\n## 층고 높은 트럭의 경우 (PC_TRUCK 으로 주차면 유형을 전달한 경우)\n- 트럭의 경우 P1 (B3) 이외의 층은 검색 대상에서 제외\n- 전고가 낮아서 P1 (B3) 아래로는 내려갈 수 없음\n",
+        "operationId": "OP_V1_01",
+        "parameters": [
+          {
+            "name": "floor",
+            "in": "query",
+            "description": "층 ID (2(P1)~3(P2) 중 선택, default 2)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "2",
+                "3"
+              ]
+            }
+          },
+          {
+            "name": "parkingType",
+            "in": "query",
+            "description": "주차면 유형 (default PC_NORMAL)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PC_NORMAL",
+                "PC_ELEC",
+                "PC_COMPACT",
+                "PC_DISABLED",
+                "PC_TRUCK"
+              ]
+            }
+          },
+          {
+            "name": "poiType",
+            "in": "query",
+            "description": "POI 유형 (default ELEVATOR)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ELEVATOR",
+                "ESCALATOR",
+                "RESTROOM",
+                "ENTRANCE",
+                "EXIT",
+                "FAMILY",
+                "WOMAN",
+                "CHARGING"
+              ]
+            }
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "default": 0
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "default": 0
+            }
+          },
+          {
+            "name": "zoneList",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "distancePriority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponseOptimalZoneResponse"
+                }
+              }
+            }
+          },
+          "300": {
+            "description": "No Data\n- 조회한 데이터가 없음.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_05",
+                  "message": "데이터가 존재하지 않습니다."
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Data Processing Error\n- 로직 처리중 Exception 발생. 개발자에게 문의 필요.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_02",
+                  "message": "데이터를 처리하는데 실패하였습니다."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request\n- 요청한 정보가 올바른지 확인한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_01",
+                  "message": "적합하지 않은 인자가 전달되었습니다."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error\n- 서버 에러 로그 확인을 요청한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_01",
+                  "message": "요청한 서비스에 문제가 발생했습니다. 잠시 후에 다시 시도해 주세요."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parking/pois/zone": {
+      "get": {
+        "tags": [
+          "최적 경로 탐색"
+        ],
+        "summary": "매장 선택 최적 주차 zone 조회",
+        "description": "# ※모든 HTTP status code 는 200 OK 를 리턴한다. (Unchecked Exception 제외)\u003Cbr\u003E\n## Operation 의 response code는 분리 표출용.\u003Cbr\u003E\u003Cbr\u003E\n# 매장 검색 후 POI ID (복수 가능)를 받아 최적 주차 Zone을 요청할 때 사용한다.\u003Cbr\u003E\n\u003Cimg src='http://121.134.167.215:60040/ope/images/20250825_poi_logic.png' alt='20250825 POI ID zone 추출 로직'/\u003E\u003Cbr\u003E\n",
+        "operationId": "OP_V1_02",
+        "parameters": [
+          {
+            "name": "poiIds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          },
+          {
+            "name": "parkingType",
+            "in": "query",
+            "description": "주차면 유형 (default PC_NORMAL)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PC_NORMAL",
+                "PC_TRUCK"
+              ]
+            }
+          },
+          {
+            "name": "poiType",
+            "in": "query",
+            "description": "POI 유형",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CHARGING"
+              ]
+            }
+          },
+          {
+            "name": "zoneList",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponseOptimalZoneResponse"
+                }
+              }
+            }
+          },
+          "300": {
+            "description": "No Data\n- 조회한 데이터가 없음.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_05",
+                  "message": "데이터가 존재하지 않습니다."
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Data Processing Error\n- 로직 처리중 Exception 발생. 개발자에게 문의 필요.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_02",
+                  "message": "데이터를 처리하는데 실패하였습니다."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request\n- 요청한 정보가 올바른지 확인한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_01",
+                  "message": "적합하지 않은 인자가 전달되었습니다."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error\n- 서버 에러 로그 확인을 요청한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_01",
+                  "message": "요청한 서비스에 문제가 발생했습니다. 잠시 후에 다시 시도해 주세요."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parameters": {
+      "get": {
+        "tags": [
+          "파라미터"
+        ],
+        "summary": "Parameter 목록 조회",
+        "description": "Parameter 목록을 조회합니다.",
+        "operationId": "searchList",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemsResponseParameterSearchResponse"
+                }
+              }
+            }
+          },
+          "300": {
+            "description": "No Data\n- 조회한 데이터가 없음.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_05",
+                  "message": "데이터가 존재하지 않습니다."
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Data Processing Error\n- 로직 처리중 Exception 발생. 개발자에게 문의 필요.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_02",
+                  "message": "데이터를 처리하는데 실패하였습니다."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request\n- 요청한 정보가 올바른지 확인한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_CT_01",
+                  "message": "적합하지 않은 인자가 전달되었습니다."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error\n- 서버 에러 로그 확인을 요청한다.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "status": "ER_SV_01",
+                  "message": "요청한 서비스에 문제가 발생했습니다. 잠시 후에 다시 시도해 주세요."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "description": "공통 오류 응답 구조체",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "상태 코드",
+            "example": "ER_SV_01"
+          },
+          "message": {
+            "type": "string",
+            "description": "메시지",
+            "example": "요청한 서비스에 문제가 발생했습니다. 잠시 후에 다시 시도해 주세요."
+          },
+          "detailMessage": {
+            "type": "string",
+            "description": "상세 메시지",
+            "example": "관리자에게 문의하세요!"
+          }
+        }
+      },
+      "ParameterModifyRequest": {
+        "type": "object",
+        "description": "Parameter Modify Request Record",
+        "properties": {
+          "parameterId": {
+            "type": "string",
+            "description": "파라메터 아이디",
+            "example": "FLOOR_SPLIT_DISTANCE",
+            "maxLength": 50,
+            "minLength": 0
+          },
+          "parameterKey": {
+            "type": "string",
+            "description": "파라메터 키",
+            "example": "P1",
+            "maxLength": 20,
+            "minLength": 0
+          },
+          "parameterValue": {
+            "type": "string",
+            "description": "파라메터 값",
+            "example": 50,
+            "maxLength": 50,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "parameterId",
+          "parameterKey"
+        ]
+      },
+      "ItemResponseParameterModifyResponse": {
+        "type": "object",
+        "description": "공통 응답 구조체",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "상태 코드",
+            "example": "OK"
+          },
+          "message": {
+            "type": "string",
+            "description": "메시지",
+            "example": "데이터를 조회하는데 성공하였습니다."
+          },
+          "item": {
+            "$ref": "#/components/schemas/ParameterModifyResponse",
+            "description": "응답 객체"
+          }
+        }
+      },
+      "ParameterModifyResponse": {
+        "type": "object",
+        "description": "Parameter Modify Response Record",
+        "properties": {
+          "parameterId": {
+            "type": "string",
+            "description": "파라메터 아이디",
+            "example": "FLOOR_SPLIT_DISTANCE"
+          },
+          "parameterKey": {
+            "type": "string",
+            "description": "파라메터 키",
+            "example": "P1"
+          },
+          "parameterName": {
+            "type": "string",
+            "description": "파라메터 이름",
+            "example": "P1 층 분산 거리"
+          },
+          "parameterValue": {
+            "type": "string",
+            "description": "파라메터 값",
+            "example": 50
+          },
+          "parameterExplanation": {
+            "type": "string",
+            "description": "파라메터 설명",
+            "example": "층 분산 시 사용되는 POI 와의 거리"
+          },
+          "createDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "생성 일시",
+            "example": "2025-04-29 00:00:00"
+          },
+          "modifyDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수정 일시",
+            "example": "2025-04-29 00:00:00"
+          }
+        }
+      },
+      "ItemResponseOptimalZoneResponse": {
+        "type": "object",
+        "description": "공통 응답 구조체",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "상태 코드",
+            "example": "OK"
+          },
+          "message": {
+            "type": "string",
+            "description": "메시지",
+            "example": "데이터를 조회하는데 성공하였습니다."
+          },
+          "item": {
+            "$ref": "#/components/schemas/OptimalZoneResponse",
+            "description": "응답 객체"
+          }
+        }
+      },
+      "OptimalZoneResponse": {
+        "type": "object",
+        "description": "최적 목적지(Zone) 좌표 응답",
+        "properties": {
+          "floor": {
+            "type": "string",
+            "description": "Zone의 층 ID",
+            "example": 2
+          },
+          "floorCongestion": {
+            "type": "boolean",
+            "description": "층의 여부",
+            "example": false
+          },
+          "zoneId": {
+            "type": "string",
+            "description": "Zone Id",
+            "example": 123
+          },
+          "zoneName": {
+            "type": "string",
+            "description": "Zone 이름",
+            "example": "B2-Zone-A"
+          },
+          "distanceFromDestination": {
+            "type": "integer",
+            "format": "int32",
+            "description": "목적지까지의 거리(m)",
+            "example": 25
+          },
+          "customDistance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "가중치가 반영된 거리(m)",
+            "example": 25
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Zone 경도",
+            "example": 127.0314043
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Zone 위도",
+            "example": 37.4890943
+          },
+          "isFallback": {
+            "type": "boolean",
+            "description": "대체 여부 (사용자가 요청한 유형이 아닌 Zone 응답)",
+            "example": false
+          },
+          "parkingPossibleCount": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Zone 의 주차면 유형별 가능 대수",
+            "example": "{PC_NORMAL: 10, PC_DISABLED: 3, PC_ELEC: 5}"
+          }
+        }
+      },
+      "ItemsResponseParameterSearchResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "상태 코드",
+            "example": "OK"
+          },
+          "message": {
+            "type": "string",
+            "description": "상태 메시지",
+            "example": "조회에 성공하였습니다."
+          },
+          "totalSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "List 응답 객체 size",
+            "example": 0
+          },
+          "items": {
+            "type": "array",
+            "description": "List 응답 객체",
+            "items": {
+              "$ref": "#/components/schemas/ParameterSearchResponse"
+            }
+          }
+        }
+      },
+      "ParameterSearchResponse": {
+        "type": "object",
+        "description": "Parameter Search Response Record",
+        "properties": {
+          "parameterId": {
+            "type": "string",
+            "description": "파라메터 아이디",
+            "example": "sample text"
+          },
+          "parameterKey": {
+            "type": "string",
+            "description": "파라메터 키",
+            "example": "sample text"
+          },
+          "parameterName": {
+            "type": "string",
+            "description": "파라메터 이름",
+            "example": "sample text"
+          },
+          "parameterValue": {
+            "type": "string",
+            "description": "파라메터 값",
+            "example": "sample text"
+          },
+          "parameterExplanation": {
+            "type": "string",
+            "description": "파라메터 설명",
+            "example": "sample text"
+          },
+          "createDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "생성 일시",
+            "example": "2025-04-29 00:00:00"
+          },
+          "modifyDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수정 일시",
+            "example": "2025-04-29 00:00:00"
+          }
+        }
+      }
+    }
+  }
+}
